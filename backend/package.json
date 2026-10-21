@@ -13,10 +13,11 @@
     "db:seed": "node src/database/seed.js up",
     "db:seed:undo": "node src/database/seed.js down",
     "db:clean": "node src/database/clean.js",
-    "test":"echo \"No tests configured\" && exit 0"
+    "test": "echo \"No tests configured\" && exit 0"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -27,6 +28,7 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
+    "multer-storage-cloudinary": "^4.0.0",
     "mysql2": "^3.10.1",
     "nodemailer": "^10.1.2",
     "razorpay": "^2.9.8",

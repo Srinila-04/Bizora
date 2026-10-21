@@ -1,23 +1,35 @@
-import path from 'path';
 import ApiResponse from '../utils/apiResponse.js';
 import ApiError from '../utils/apiError.js';
 import { Business, Product, User } from '../database/models/index.js';
-import { deleteUploadedFile, verifyImageMagicBytes } from '../middleware/upload.middleware.js';
 import { ROLES } from '../constants/roles.js';
+import cloudinary from '../config/cloudinary.js';
+
+// Helper to safely delete an uploaded asset from Cloudinary on error
+const deleteCloudinaryFile = async (publicId) => {
+  if (!publicId) return;
+  try {
+    await cloudinary.uploader.destroy(publicId);
+  } catch (err) {
+    // Ignore cleanup errors
+  }
+};
 
 export class UploadController {
+  /**
+   * Upload User Avatar
+   */
   static async uploadAvatar(req, res, next) {
     try {
       if (!req.file) {
         throw ApiError.badRequest('No image file uploaded');
       }
 
-      const fileUrl = `/uploads/${req.file.filename}`;
+      // Cloudinary returns the full HTTPS URL in req.file.path
+      const fileUrl = req.file.path;
       const user = await User.findByPk(req.user.id);
 
-      // Clean old avatar if existed
-      if (user.avatar && user.avatar.startsWith('/uploads/')) {
-        deleteUploadedFile(path.basename(user.avatar));
+      if (!user) {
+        throw ApiError.notFound('User not found');
       }
 
       user.avatar = fileUrl;
@@ -25,14 +37,19 @@ export class UploadController {
 
       return ApiResponse.success(res, 'Avatar uploaded successfully', {
         avatarUrl: fileUrl,
-        filename: req.file.filename
+        filename: req.file.filename // Cloudinary public_id
       });
     } catch (error) {
-      if (req.file) deleteUploadedFile(req.file.filename);
+      if (req.file?.filename) {
+        await deleteCloudinaryFile(req.file.filename);
+      }
       return next(error);
     }
   }
 
+  /**
+   * Upload Business Logo or Banner
+   */
   static async uploadBusinessAsset(req, res, next) {
     try {
       if (!req.file) {
@@ -53,19 +70,7 @@ export class UploadController {
         throw ApiError.forbidden('You do not have permission to upload assets for this business');
       }
 
-      // Verify file binary magic bytes to guarantee it is a valid image
-      if (!verifyImageMagicBytes(req.file.path)) {
-        deleteUploadedFile(req.file.filename);
-        throw ApiError.badRequest('Invalid or corrupted image file. Allowed formats: JPG, PNG, WebP, GIF.');
-      }
-
-      const fileUrl = `/uploads/${req.file.filename}`;
-
-      // Clean old file
-      const oldAsset = assetType === 'logo' ? business.logo : business.banner;
-      if (oldAsset && oldAsset.startsWith('/uploads/')) {
-        deleteUploadedFile(path.basename(oldAsset));
-      }
+      const fileUrl = req.file.path;
 
       if (assetType === 'logo') {
         business.logo = fileUrl;
@@ -80,11 +85,16 @@ export class UploadController {
         business
       });
     } catch (error) {
-      if (req.file) deleteUploadedFile(req.file.filename);
+      if (req.file?.filename) {
+        await deleteCloudinaryFile(req.file.filename);
+      }
       return next(error);
     }
   }
 
+  /**
+   * Upload Product Images (Supports multiple images)
+   */
   static async uploadProductImages(req, res, next) {
     try {
       if (!req.files || req.files.length === 0) {
@@ -92,7 +102,7 @@ export class UploadController {
       }
 
       const { productId } = req.body;
-      const uploadedUrls = req.files.map((f) => `/uploads/${f.filename}`);
+      const uploadedUrls = req.files.map((f) => f.path);
 
       if (productId) {
         const product = await Product.findByPk(productId, {
@@ -116,8 +126,12 @@ export class UploadController {
         images: uploadedUrls
       });
     } catch (error) {
-      if (req.files) {
-        req.files.forEach((f) => deleteUploadedFile(f.filename));
+      if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+          if (file.filename) {
+            await deleteCloudinaryFile(file.filename);
+          }
+        }
       }
       return next(error);
     }
@@ -125,4 +139,3 @@ export class UploadController {
 }
 
 export default UploadController;
-
