@@ -10,8 +10,12 @@ const parseOrigins = () => {
   if (config.clientUrl) {
     const list = config.clientUrl.split(',').map((u) => u.trim()).filter(Boolean);
     for (const url of list) {
-      origins.add(url);
-      origins.add(url.replace(/\/+$/, ''));
+      const cleanUrl = url.replace(/\/+$/, '');
+      origins.add(cleanUrl);
+      if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+        origins.add(`https://${cleanUrl}`);
+        origins.add(`http://${cleanUrl}`);
+      }
     }
   }
 
